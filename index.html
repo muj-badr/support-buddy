@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support Buddy - Your AI Task Companion</title>
+    <meta name="description" content="Your personal AI support buddy for task reminders and accountability">
+    <meta name="theme-color" content="#6366f1">
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    
+    <!-- TensorFlow.js for local AI -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #8b5cf6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #ffffff;
+            --bg-secondary: #f9fafb;
+            --text: #111827;
+            --text-secondary: #6b7280;
+            --border: #e5e7eb;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #1f2937;
+                --bg-secondary: #111827;
+                --text: #f9fafb;
+                --text-secondary: #d1d5db;
+                --border: #374151;
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+            transition: background-color 0.3s ease;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 2rem 1rem;
+            text-align: center;
+            border-radius: 0 0 2rem 2rem;
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .ai-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .view {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .onboarding-card {
+            background: var(--bg-secondary);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 1.5rem;
+        }
+
+        .chat-message {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 1.5rem 1.5rem 1.5rem 0.25rem;
+            margin-bottom: 1.5rem;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            background: var(--bg);
+            color: var(--text);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .time-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text);
+            border: 2px solid var(--border);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .task-card {
+            background: var(--bg-secondary);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+
+        .task-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .task-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-pending {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        .status-completed {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .streak-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg);
+            border-top: 1px solid var(--border);
+            padding: 1rem;
+            display: flex;
+            justify-content: space-around;
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            color: var(--text-secondary);
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: var(--bg-secondary);
+            color: var(--primary);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            padding: 1rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--bg);
+            border-radius: 1rem;
+            padding: 2rem;
+            max-width: 500px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 1rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary);
+            background: var(--bg-secondary);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .image-preview {
+            margin-top: 1rem;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+
+        .image-preview img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .settings-section {
+            margin-bottom: 2rem;
+        }
+
+        .settings-section h3 {
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 60px;
+            height: 30px;
+            display: inline-block;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--border);
+            transition: 0.4s;
+            border-radius: 30px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background: var(--primary);
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(30px);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state svg {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        @media (max-width: 640px) {
+            .time-inputs {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .ai-thinking {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border-radius: 1rem;
+            margin: 1rem 0;
+        }
+
+        .ai-thinking::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .notification-permission {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .fab {
+            position: fixed;
+            bottom: 5rem;
+            right: 1rem;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            box-shadow: var(--shadow-lg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: transform 0.3s ease;
+        }
+
+        .fab:hover {
+            transform: scale(1.1);
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🤖 Support Buddy</h1>
+        <div class="ai-status">
+            <span class="status-dot"></span>
+            <span id="aiStatus">AI Ready</span>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Onboarding View -->
+        <div id="onboardingView" class="view active">
+            <div class="chat-message">
+                <p>👋 Hi! I'm your Support Buddy. I'm here to help you stay on track with your tasks and goals!</p>
+                <p style="margin-top: 0.5rem;">Let's set up your first task reminder. What would you like support with?</p>
+            </div>
+
+            <div class="onboarding-card">
+                <form id="taskForm">
+                    <div class="form-group">
+                        <label for="taskName">What task do you need support with?</label>
+                        <input type="text" id="taskName" placeholder="e.g., Morning workout, Meditation, Study session..." required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="taskDescription">Tell me more about this task (optional)</label>
+                        <textarea id="taskDescription" rows="3" placeholder="Any details that might help me support you better..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>When should I remind you?</label>
+                        <div class="time-inputs">
+                            <input type="time" id="reminderTime" required>
+                            <select id="reminderFrequency">
+                                <option value="daily">Daily</option>
+                                <option value="weekdays">Weekdays only</option>
+                                <option value="weekends">Weekends only</option>
+                                <option value="once">Just once</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="randomization">
+                            <input type="checkbox" id="randomization">
+                            Add randomization (±10 mins)
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="proofRequired">Accountability level</label>
+                        <select id="proofRequired">
+                            <option value="gentle">Gentle - Just remind me</option>
+                            <option value="medium">Medium - Ask for confirmation</option>
+                            <option value="strict">Strict - Require photo proof</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <span>🚀</span>
+                        <span>Set Up Task</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tasks View -->
+        <div id="tasksView" class="view">
+            <div id="tasksList"></div>
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+                <h3>No tasks yet</h3>
+                <p>Add your first task to get started!</p>
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settingsView" class="view">
+            <div class="settings-section">
+                <h3>⚙️ Preferences</h3>
+                
+                <div class="form-group">
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Enable Notifications</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="notificationsToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Dark Mode</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="darkModeToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="apiKey">Groq API Key (Optional - for enhanced AI)</label>
+                    <input type="password" id="apiKey" placeholder="Enter your Groq API key for better responses">
+                    <small style="color: var(--text-secondary); display: block; margin-top: 0.5rem;">
+                        Get a free key at groq.com. Your key stays on your device.
+                    </small>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>🔒 Privacy</h3>
+                <p style="color: var(--text-secondary); line-height: 1.8;">
+                    • All data is stored locally on your device<br>
+                    • No account or sign-up required<br>
+                    • Photos are never uploaded to any server<br>
+                    • AI runs locally when possible<br>
+                    • Optional API keys are encrypted
+                </p>
+            </div>
+
+            <div class="settings-section">
+                <h3>📊 Statistics</h3>
+                <div id="stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="onboarding-card" style="text-align: center;">
+                        <div style="font-size: 2rem; font-weight: bold; color: var(--primary);">0</div>
+                        <div style="color: var(--text-secondary);">Tasks Completed</div>
+                    </div>
+                    <div class="onboarding-card" style="text-align: center;">
+                        <div style="font-size: 2rem; font-weight: bold; color: var(--success);">0</div>
+                        <div style="color: var(--text-secondary);">Current Streak</div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn btn-danger" onclick="clearAllData()">
+                Clear All Data
+            </button>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <div class="bottom-nav">
+        <div class="nav-item active" onclick="switchView('tasks')">
+            <span>📋</span>
+            <span style="font-size: 0.75rem;">Tasks</span>
+        </div>
+        <div class="nav-item" onclick="switchView('settings')">
+            <span>⚙️</span>
+            <span style="font-size: 0.75rem;">Settings</span>
+        </div>
+    </div>
+
+    <!-- Floating Action Button -->
+    <button class="fab" onclick="switchView('onboarding')" id="fabButton">
+        +
+    </button>
+
+    <!-- Task Check Modal -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Task Check-In</h2>
+            <p id="modalMessage" style="margin: 1rem 0;">Did you complete your task?</p>
+            
+            <div id="photoUpload" style="display: none;">
+                <div class="upload-area" onclick="document.getElementById('photoInput').click()">
+                    <span>📸</span>
+                    <p>Click to upload proof photo</p>
+                    <input type="file" id="photoInput" accept="image/*" style="display: none;">
+                </div>
+                <div id="imagePreview" class="image-preview" style="display: none;">
+                    <img id="previewImg" src="" alt="Proof">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button class="btn btn-success" onclick="completeTask()">
+                    ✅ Complete
+                </button>
+                <button class="btn btn-secondary" onclick="snoozeTask()">
+                    ⏰ Snooze 10min
+                </button>
+                <button class="btn btn-secondary" onclick="closeModal()">
+                    ❌ Skip
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // PWA Support Buddy - Main Application
+        
+        // Global state
+        let aiModel = null;
+        let tasks = [];
+        let currentTask = null;
+        let stats = { completed: 0, streak: 0 };
+        
+        // Initialize app
+        async function initApp() {
+            // Load saved data
+            loadTasks();
+            loadStats();
+            loadSettings();
+            
+            // Initialize AI
+            await initAI();
+            
+            // Request notification permission
+            if ('Notification' in window && Notification.permission === 'default') {
+                const permission = await Notification.requestPermission();
+                document.getElementById('notificationsToggle').checked = permission === 'granted';
+            }
+            
+            // Set up service worker for PWA
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.register('./service-worker.js');
+                    console.log('Service Worker registered');
+                } catch (err) {
+                    console.log('Service Worker registration failed:', err);
+                }
+            }
+            
+            // Check for pending reminders
+            checkReminders();
+            setInterval(checkReminders, 60000); // Check every minute
+            
+            // Update UI
+            updateTasksList();
+            updateStats();
+        }
+        
+        // AI Initialization
+        async function initAI() {
+            try {
+                document.getElementById('aiStatus').textContent = 'Loading AI...';
+                
+                // Try to load TensorFlow.js model
+                if (typeof use !== 'undefined') {
+                    aiModel = await use.load();
+                    document.getElementById('aiStatus').textContent = 'AI Ready (Local)';
+                } else {
+                    document.getElementById('aiStatus').textContent = 'AI Ready (Templates)';
+                }
+            } catch (error) {
+                console.error('AI initialization error:', error);
+                document.getElementById('aiStatus').textContent = 'AI Offline (Using Templates)';
+            }
+        }
+        
+        // AI Response Generation
+        async function getAIResponse(context, taskType = 'general') {
+            // Try API if available (Groq)
+            const apiKey = localStorage.getItem('groqApiKey');
+            if (apiKey && navigator.onLine) {
+                try {
+                    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            model: 'llama3-8b-8192',
+                            messages: [{
+                                role: 'system',
+                                content: 'You are a supportive AI buddy helping users stay on track with their tasks. Be encouraging, brief, and positive.'
+                            }, {
+                                role: 'user',
+                                content: context
+                            }],
+                            max_tokens: 150,
+                            temperature: 0.7
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        return data.choices[0].message.content;
+                    }
+                } catch (error) {
+                    console.error('API error:', error);
+                }
+            }
+            
+            // Fallback to templates
+            return getTemplateResponse(taskType, context);
+        }
+        
+        // Template responses
+        function getTemplateResponse(taskType, context) {
+            const templates = {
+                welcome: [
+                    "Great choice! I'll help you stay consistent with this.",
+                    "Awesome! Let's build this habit together.",
+                    "Perfect! I'm here to support you every step of the way."
+                ],
+                reminder: [
+                    "Hey! Time for your task. You've got this! 💪",
+                    "Ready to tackle your task? I believe in you!",
+                    "Your future self will thank you for doing this now!"
+                ],
+                complete: [
+                    "Amazing work! You're building great habits! 🎉",
+                    "Well done! Consistency is key, and you're nailing it!",
+                    "Fantastic! Another step towards your goals!"
+                ],
+                skip: [
+                    "No worries! Tomorrow is a fresh start.",
+                    "It's okay! Progress, not perfection.",
+                    "That's alright! Ready to try again next time?"
+                ]
+            };
+            
+            const category = context.includes('complete') ? 'complete' :
+                           context.includes('skip') ? 'skip' :
+                           context.includes('remind') ? 'reminder' : 'welcome';
+            
+            const responses = templates[category];
+            return responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        // Task Management
+        document.getElementById('taskForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const task = {
+                id: Date.now(),
+                name: document.getElementById('taskName').value,
+                description: document.getElementById('taskDescription').value,
+                time: document.getElementById('reminderTime').value,
+                frequency: document.getElementById('reminderFrequency').value,
+                randomization: document.getElementById('randomization').checked,
+                proofRequired: document.getElementById('proofRequired').value,
+                createdAt: new Date().toISOString(),
+                completions: [],
+                streak: 0,
+                lastNotified: null
+            };
+            
+            tasks.push(task);
+            saveTasks();
+            
+            // Get AI encouragement
+            const aiResponse = await getAIResponse(`User created a new task: ${task.name}. Give brief encouragement.`);
+            showNotification('Task Created!', aiResponse);
+            
+            // Reset form and switch view
+            document.getElementById('taskForm').reset();
+            switchView('tasks');
+            updateTasksList();
+        });
+        
+        function saveTasks() {
+            localStorage.setItem('supportBuddyTasks', JSON.stringify(tasks));
+        }
+        
+        function loadTasks() {
+            const saved = localStorage.getItem('supportBuddyTasks');
+            if (saved) {
+                tasks = JSON.parse(saved);
+            }
+        }
+        
+        function updateTasksList() {
+            const container = document.getElementById('tasksList');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (tasks.length === 0) {
+                container.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            container.innerHTML = tasks.map(task => `
+                <div class="task-card">
+                    <div class="task-header">
+                        <div>
+                            <div class="task-title">${task.name}</div>
+                            ${task.streak > 0 ? `<div class="streak-badge">🔥 ${task.streak} day streak</div>` : ''}
+                        </div>
+                        <span class="task-status ${isTaskCompletedToday(task) ? 'status-completed' : 'status-pending'}">
+                            ${isTaskCompletedToday(task) ? 'Completed' : 'Pending'}
+                        </span>
+                    </div>
+                    <div class="task-meta">
+                        <div class="meta-item">⏰ ${task.time}</div>
+                        <div class="meta-item">📅 ${task.frequency}</div>
+                        <div class="meta-item">📸 ${task.proofRequired}</div>
+                    </div>
+                    ${task.description ? `<p style="color: var(--text-secondary);">${task.description}</p>` : ''}
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                        <button class="btn btn-primary" onclick="triggerReminder(${task.id})">
+                            Test Reminder
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteTask(${task.id})">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function isTaskCompletedToday(task) {
+            const today = new Date().toDateString();
+            return task.completions.some(date => new Date(date).toDateString() === today);
+        }
+        
+        function deleteTask(taskId) {
+            if (confirm('Are you sure you want to delete this task?')) {
+                tasks = tasks.filter(t => t.id !== taskId);
+                saveTasks();
+                updateTasksList();
+            }
+        }
+        
+        // Reminder System
+        function checkReminders() {
+            const now = new Date();
+            const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            
+            tasks.forEach(task => {
+                if (shouldTriggerReminder(task, currentTime)) {
+                    triggerReminder(task.id);
+                    task.lastNotified = now.toISOString();
+                    saveTasks();
+                }
+            });
+        }
+        
+        function shouldTriggerReminder(task, currentTime) {
+            // Check if already notified recently (within 30 minutes)
+            if (task.lastNotified) {
+                const lastNotified = new Date(task.lastNotified);
+                const now = new Date();
+                const diffMinutes = (now - lastNotified) / 60000;
+                if (diffMinutes < 30) return false;
+            }
+            
+            // Check if already completed today
+            if (isTaskCompletedToday(task)) return false;
+            
+            // Check frequency
+            const today = new Date().getDay();
+            if (task.frequency === 'weekdays' && (today === 0 || today === 6)) return false;
+            if (task.frequency === 'weekends' && today > 0 && today < 6) return false;
+            if (task.frequency === 'once' && task.completions.length > 0) return false;
+            
+            // Check time with randomization
+            let targetTime = task.time;
+            if (task.randomization) {
+                const [hours, minutes] = targetTime.split(':').map(Number);
+                const totalMinutes = hours * 60 + minutes;
+                const randomOffset = Math.floor(Math.random() * 21) - 10; // -10 to +10
+                const adjustedMinutes = totalMinutes + randomOffset;
+                const adjustedHours = Math.floor(adjustedMinutes / 60);
+                const adjustedMins = adjustedMinutes % 60;
+                targetTime = `${String(adjustedHours).padStart(2, '0')}:${String(adjustedMins).padStart(2, '0')}`;
+            }
+            
+            return currentTime === targetTime;
+        }
+        
+        async function triggerReminder(taskId) {
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) return;
+            
+            currentTask = task;
+            
+            // Get AI message
+            const aiMessage = await getAIResponse(`Remind user about task: ${task.name}. Be encouraging and brief.`);
+            
+            // Show notification
+            showNotification(`Time for: ${task.name}`, aiMessage);
+            
+            // Show modal
+            document.getElementById('modalTitle').textContent = task.name;
+            document.getElementById('modalMessage').textContent = aiMessage;
+            document.getElementById('photoUpload').style.display = 
+                task.proofRequired === 'strict' ? 'block' : 'none';
+            document.getElementById('taskModal').classList.add('active');
+        }
+        
+        async function completeTask() {
+            if (!currentTask) return;
+            
+            if (currentTask.proofRequired === 'strict') {
+                const photoInput = document.getElementById('photoInput');
+                if (!photoInput.files.length) {
+                    alert('Please upload a photo as proof!');
+                    return;
+                }
+            }
+            
+            // Mark as completed
+            currentTask.completions.push(new Date().toISOString());
+            
+            // Update streak
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const completedYesterday = currentTask.completions.some(date => 
+                new Date(date).toDateString() === yesterday.toDateString()
+            );
+            currentTask.streak = completedYesterday ? currentTask.streak + 1 : 1;
+            
+            // Update stats
+            stats.completed++;
+            stats.streak = Math.max(stats.streak, currentTask.streak);
+            saveStats();
+            
+            saveTasks();
+            updateTasksList();
+            updateStats();
+            
+            // Get AI congratulations
+            const aiResponse = await getAIResponse(`User completed task: ${currentTask.name}. Congratulate them! Streak: ${currentTask.streak} days.`);
+            showNotification('Task Completed! 🎉', aiResponse);
+            
+            closeModal();
+        }
+        
+        function snoozeTask() {
+            if (!currentTask) return;
+            
+            // Set snooze for 10 minutes
+            setTimeout(() => {
+                triggerReminder(currentTask.id);
+            }, 10 * 60 * 1000);
+            
+            showNotification('Snoozed', 'I\'ll remind you in 10 minutes!');
+            closeModal();
+        }
+        
+        function closeModal() {
+            document.getElementById('taskModal').classList.remove('active');
+            document.getElementById('photoInput').value = '';
+            document.getElementById('imagePreview').style.display = 'none';
+            currentTask = null;
+        }
+        
+        // Photo handling
+        document.getElementById('photoInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    document.getElementById('previewImg').src = e.target.result;
+                    document.getElementById('imagePreview').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Drag and drop for photos
+        const uploadArea = document.querySelector('.upload-area');
+        if (uploadArea) {
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    document.getElementById('photoInput').files = files;
+                    const event = new Event('change', { bubbles: true });
+                    document.getElementById('photoInput').dispatchEvent(event);
+                }
+            });
+        }
+        
+        // View Management
+        function switchView(viewName) {
+            // Remove active class from all views
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            
+            // Handle view switching
+            if (viewName === 'onboarding') {
+                document.getElementById('onboardingView').classList.add('active');
+            } else if (viewName === 'tasks') {
+                document.getElementById('tasksView').classList.add('active');
+                document.querySelector('.nav-item:nth-child(1)').classList.add('active');
+                updateTasksList();
+            } else if (viewName === 'settings') {
+                document.getElementById('settingsView').classList.add('active');
+                document.querySelector('.nav-item:nth-child(2)').classList.add('active');
+            }
+            
+            // Show/hide FAB based on view
+            document.getElementById('fabButton').style.display = 
+                viewName === 'onboarding' ? 'none' : 'flex';
+        }
+        
+        // Settings Management
+        function loadSettings() {
+            // Dark mode
+            const darkMode = localStorage.getItem('darkMode') === 'true';
+            document.getElementById('darkModeToggle').checked = darkMode;
+            if (darkMode) {
+                document.body.classList.add('dark-mode');
+            }
+            
+            // Notifications
+            const notificationsEnabled = Notification.permission === 'granted';
+            document.getElementById('notificationsToggle').checked = notificationsEnabled;
+            
+            // API Key
+            const apiKey = localStorage.getItem('groqApiKey');
+            if (apiKey) {
+                document.getElementById('apiKey').value = apiKey;
+            }
+        }
+        
+        document.getElementById('darkModeToggle').addEventListener('change', (e) => {
+            localStorage.setItem('darkMode', e.target.checked);
+            document.body.classList.toggle('dark-mode', e.target.checked);
+        });
+        
+        document.getElementById('notificationsToggle').addEventListener('change', async (e) => {
+            if (e.target.checked) {
+                const permission = await Notification.requestPermission();
+                e.target.checked = permission === 'granted';
+            }
+        });
+        
+        document.getElementById('apiKey').addEventListener('change', (e) => {
+            if (e.target.value) {
+                localStorage.setItem('groqApiKey', e.target.value);
+                document.getElementById('aiStatus').textContent = 'AI Ready (Enhanced)';
+            } else {
+                localStorage.removeItem('groqApiKey');
+                document.getElementById('aiStatus').textContent = 'AI Ready (Local)';
+            }
+        });
+        
+        // Stats Management
+        function loadStats() {
+            const saved = localStorage.getItem('supportBuddyStats');
+            if (saved) {
+                stats = JSON.parse(saved);
+            }
+        }
+        
+        function saveStats() {
+            localStorage.setItem('supportBuddyStats', JSON.stringify(stats));
+        }
+        
+        function updateStats() {
+            const statsDiv = document.getElementById('stats');
+            if (statsDiv) {
+                statsDiv.innerHTML = `
+                    <div class="onboarding-card" style="text-align: center;">
+                        <div style="font-size: 2rem; font-weight: bold; color: var(--primary);">${stats.completed}</div>
+                        <div style="color: var(--text-secondary);">Tasks Completed</div>
+                    </div>
+                    <div class="onboarding-card" style="text-align: center;">
+                        <div style="font-size: 2rem; font-weight: bold; color: var(--success);">${stats.streak}</div>
+                        <div style="color: var(--text-secondary);">Best Streak</div>
+                    </div>
+                `;
+            }
+        }
+        
+        function clearAllData() {
+            if (confirm('This will delete all tasks and data. Are you sure?')) {
+                localStorage.clear();
+                tasks = [];
+                stats = { completed: 0, streak: 0 };
+                updateTasksList();
+                updateStats();
+                showNotification('Data Cleared', 'All data has been deleted.');
+            }
+        }
+        
+        // Notification Helper
+        function showNotification(title, body) {
+            // Try browser notification first
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(title, {
+                    body: body,
+                    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDEyOCAxMjgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNjQiIGN5PSI2NCIgcj0iNTAiIGZpbGw9IiM2MzY2ZjEiLz48L3N2Zz4=',
+                    badge: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDEyOCAxMjgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNjQiIGN5PSI2NCIgcj0iNTAiIGZpbGw9IiM2MzY2ZjEiLz48L3N2Zz4=',
+                    vibrate: [200, 100, 200]
+                });
+            }
+            
+            // Always show in-app notification
+            const notification = document.createElement('div');
+            notification.className = 'notification-permission';
+            notification.innerHTML = `
+                <div>
+                    <strong>${title}</strong>
+                    <p style="margin: 0; font-size: 0.875rem;">${body}</p>
+                </div>
+            `;
+            notification.style.position = 'fixed';
+            notification.style.top = '1rem';
+            notification.style.left = '50%';
+            notification.style.transform = 'translateX(-50%)';
+            notification.style.zIndex = '9999';
+            notification.style.maxWidth = '90%';
+            notification.style.animation = 'slideIn 0.3s ease';
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 4000);
+        }
+        
+        // Service Worker code (basic PWA functionality)
+        // const serviceWorkerCode = `
+            self.addEventListener('install', (event) => {
+                self.skipWaiting();
+            });
+            
+            self.addEventListener('activate', (event) => {
+                event.waitUntil(clients.claim());
+            });
+            
+            self.addEventListener('fetch', (event) => {
+                // Basic fetch handler
+                event.respondWith(fetch(event.request));
+            });
+        `;
+        
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', initApp);
+        
+        // Handle beforeinstallprompt for PWA
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show install button/prompt
+            const installBtn = document.createElement('button');
+            installBtn.className = 'btn btn-primary';
+            installBtn.textContent = 'Install App';
+            installBtn.style.position = 'fixed';
+            installBtn.style.bottom = '8rem';
+            installBtn.style.left = '50%';
+            installBtn.style.transform = 'translateX(-50%)';
+            installBtn.style.zIndex = '1000';
+            
+            installBtn.addEventListener('click', async () => {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    installBtn.remove();
+                }
+                deferredPrompt = null;
+            });
+            
+            document.body.appendChild(installBtn);
+        });
+        
+        // Check if running on mobile and suggest adding to home screen
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+            if (!window.matchMedia('(display-mode: standalone)').matches) {
+                setTimeout(() => {
+                    showNotification('Install App', 'Add Support Buddy to your home screen for the best experience!');
+                }, 10000);
+            }
+        }
+    </script>
+</body>
+</html>
